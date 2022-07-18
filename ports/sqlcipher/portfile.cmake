@@ -1,5 +1,3 @@
-vcpkg_check_linkage(ONLY_DYNAMIC_LIBRARY)
-
 vcpkg_from_github(
     OUT_SOURCE_PATH SOURCE_PATH
     REPO sqlcipher/sqlcipher
@@ -8,41 +6,51 @@ vcpkg_from_github(
     HEAD_REF master
 )
 
-# Don't use vcpkg_build_nmake, because it doesn't handle nmake targets correctly.
-find_program(NMAKE nmake REQUIRED)
+if(WIN32)
+    # Don't use vcpkg_build_nmake, because it doesn't handle nmake targets correctly.
+    find_program(NMAKE nmake REQUIRED)
 
-# Find tclsh Executable needed for Amalgamation of SQLite
-file(GLOB TCLSH_CMD
-		${CURRENT_INSTALLED_DIR}/tools/tcl/bin/tclsh*${VCPKG_HOST_EXECUTABLE_SUFFIX}
-)
-file(TO_NATIVE_PATH "${TCLSH_CMD}" TCLSH_CMD)
-file(TO_NATIVE_PATH "${SOURCE_PATH}" SOURCE_PATH_NAT)
+    # Find tclsh Executable needed for Amalgamation of SQLite
+    file(GLOB TCLSH_CMD
+            ${CURRENT_INSTALLED_DIR}/tools/tcl/bin/tclsh*${VCPKG_HOST_EXECUTABLE_SUFFIX}
+    )
+    file(TO_NATIVE_PATH "${TCLSH_CMD}" TCLSH_CMD)
+    file(TO_NATIVE_PATH "${SOURCE_PATH}" SOURCE_PATH_NAT)
 
-# Determine TCL version (e.g. [path]tclsh90s.exe -> 90)
-string(REGEX REPLACE ^.*tclsh "" TCLVERSION ${TCLSH_CMD})
-string(REGEX REPLACE [A-Za-z]?${VCPKG_HOST_EXECUTABLE_SUFFIX}$ "" TCLVERSION ${TCLVERSION})
+    # Determine TCL version (e.g. [path]tclsh90s.exe -> 90)
+    string(REGEX REPLACE ^.*tclsh "" TCLVERSION ${TCLSH_CMD})
+    string(REGEX REPLACE [A-Za-z]?[A-Za-z]?${VCPKG_HOST_EXECUTABLE_SUFFIX}$ "" TCLVERSION ${TCLVERSION})
+    list(APPEND NMAKE_OPTIONS
+            TCLSH_CMD="${TCLSH_CMD}"
+            TCLVERSION=${TCLVERSION}
+            ORIGINAL_SRC="${SOURCE_PATH_NAT}"
+            EXT_FEATURE_FLAGS=-DSQLITE_TEMP_STORE=2\ -DSQLITE_HAS_CODEC
+            LTLIBS=libcrypto.lib
+            LTLIBPATHS=/LIBPATH:"${CURRENT_INSTALLED_DIR}/lib/"
+    )
+    if(VCPKG_CRT_LINKAGE EQUAL static)
+        list(APPEND NMAKE_OPTIONS USE_CRT_DLL=0)
+    else()
+        list(APPEND NMAKE_OPTIONS USE_CRT_DLL=1)
+    endif()
+    if(WIN32)
+        list(APPEND NMAKE_OPTIONS TLIBS=Crypt32.lib\ Ws2_32.Lib\ Advapi32.lib\ user32.lib)
+    endif()
 
-list(APPEND NMAKE_OPTIONS
-		TCLSH_CMD="${TCLSH_CMD}"
-		TCLVERSION=${TCLVERSION}
-		ORIGINAL_SRC="${SOURCE_PATH_NAT}"
-		EXT_FEATURE_FLAGS=-DSQLITE_TEMP_STORE=2\ -DSQLITE_HAS_CODEC
-		LTLIBS=libcrypto.lib
-        LTLIBPATHS=/LIBPATH:"${CURRENT_INSTALLED_DIR}/lib/"
-)
+    set(ENV{INCLUDE} "${CURRENT_INSTALLED_DIR}/include;$ENV{INCLUDE}")
 
-set(ENV{INCLUDE} "${CURRENT_INSTALLED_DIR}/include;$ENV{INCLUDE}")
-
-# Creating amalgamation files
-message(STATUS "Pre-building ${TARGET_TRIPLET}")
-vcpkg_execute_required_process(
-	COMMAND ${NMAKE} -f Makefile.msc /A /NOLOGO clean tcl
-	${NMAKE_OPTIONS}
-	WORKING_DIRECTORY ${SOURCE_PATH}
-	LOGNAME pre-build-${TARGET_TRIPLET}
-)
-message(STATUS "Pre-building ${TARGET_TRIPLET} done")
-
+    # Creating amalgamation files
+    message(STATUS "Pre-building ${TARGET_TRIPLET}")
+    vcpkg_execute_required_process(
+        COMMAND ${NMAKE} -f Makefile.msc /A /NOLOGO clean tcl
+        ${NMAKE_OPTIONS}
+        WORKING_DIRECTORY ${SOURCE_PATH}
+        LOGNAME pre-build-${TARGET_TRIPLET}
+    )
+    message(STATUS "Pre-building ${TARGET_TRIPLET} done")
+elseif(LINUX)
+    # Run sqlcipher configure and make
+endif()
 # The rest of the build process with the CMakeLists.txt is merely a copy of sqlite3
 
 file(COPY ${CMAKE_CURRENT_LIST_DIR}/CMakeLists.txt DESTINATION ${SOURCE_PATH})
