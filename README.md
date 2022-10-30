@@ -1,3 +1,8 @@
+# Status
+I hacked the port on windows and it should be able to build statically, however I didn't get to setting it up on Linux.
+
+---- Original readme below.
+
 # Vcpkg: Overview
 
 [中文总览](README_zh_CN.md)
